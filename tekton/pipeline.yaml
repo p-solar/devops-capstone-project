@@ -50,19 +50,6 @@ spec:
         value: "-v --with-spec --spec-color"
       runAfter:
         - clone
-    - name: lint
-      workspaces:
-        - name: source
-          workspace: pipeline-workspace
-      taskRef:
-        name: flake8
-      params:
-      - name: image
-        value: "python:3.9-slim"
-      - name: args
-        value: ["--count","--max-complexity=10","--max-line-length=127","--statistics"]
-      runAfter:
-        - clone
     - name: build
       workspaces:
         - name: source
@@ -75,4 +62,21 @@ spec:
         value: "$(params.build-image)"
       runAfter:
         - tests
-        - lint
+    - name: deploy
+      workspaces:
+        - name: manifest-dir
+          workspace: pipeline-workspace
+      taskRef:
+        name: openshift-client
+        kind: ClusterTask
+      params:
+      - name: SCRIPT
+        value: |
+          echo "Updating manifest..."
+          sed -i "s|image-registry.openshift-image-registry.svc:5000/sn-labs-pvrotti/accounts:1|$(params.build-image)|g" deploy/deployment.yaml
+          cat deploy/deployment.yaml
+          echo "Deploying to OpenShift..."
+          oc apply -f deploy/
+          oc get pods -l app=accounts
+      runAfter:
+        - build
